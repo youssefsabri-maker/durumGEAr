@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Sabri Youssef" />
+
+<meta name="date" content="2026-07-18" />
+
+<title>durumGEAr: A Confound-Aware GEA Modelling Workflow</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">durumGEAr: A Confound-Aware GEA Modelling
+Workflow</h1>
+<h4 class="author">Sabri Youssef</h4>
+<h4 class="date">2026-07-18</h4>
+
+
+
+<div id="why-this-package-exists" class="section level2">
+<h2>Why this package exists</h2>
+<p>Genotype-environment association (GEA) data from genebank collections
+is routinely <strong>pseudoreplicated</strong> (many accessions share
+one collection site, so their bioclimatic predictors are literally
+identical) and <strong>spatially confounded</strong> (country of origin
+can stand in for climate, inflating apparent predictive skill). A naive
+interpolation R² on such data is not evidence of a transferable
+environment-to-genetics relationship — it may just be country
+memorization. <code>durumGEAr</code> packages the full defensible
+workflow used to tell these apart, on a durum wheat (<em>Triticum
+turgidum</em> ssp. <em>durum</em>) genebank collection, following the
+function-naming conventions of <code>icardaFIGSr</code>.</p>
+<p>The pipeline has four stages: (1) collapse pseudoreplicated rows to
+independent effective units, (2) evaluate with spatially-aware
+cross-validation that never lets one site or one country appear in both
+train and test, (3) residualize out country identity to see what climate
+signal remains, and (4) run a permutation-based driver analysis on
+what’s left.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(durumGEAr)</span></code></pre></div>
+</div>
+<div id="collapsing-pseudoreplicated-rows-to-effective-units" class="section level2">
+<h2>1. Collapsing pseudoreplicated rows to effective units</h2>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">data</span>(durumRaw)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="fu">dim</span>(durumRaw)</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co">#&gt; [1] 4545   43</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>cu <span class="ot">&lt;-</span> <span class="fu">collapseUnits</span>(durumRaw)</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="fu">print</span>(cu)</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="co">#&gt; &lt;unitCollapse&gt;</span></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="co">#&gt;   Raw rows ................... 4545</span></span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a><span class="co">#&gt;   Exact duplicate rows ....... 0</span></span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a><span class="co">#&gt;   Cloned-gPC rows ............ 58</span></span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a><span class="co">#&gt;   IG-duplicate rows .......... 2</span></span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a><span class="co">#&gt;   Min membership confidence .. 0.5002</span></span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a><span class="co">#&gt;   Incomplete-admixture rows .. 957</span></span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="co">#&gt;   Max within-group pred. SD .. 3.22e-13  (PASS - predictors constant)</span></span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="co">#&gt;   Effective units ............ 1098</span></span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="co">#&gt;   gpc_missing_all_cloned ..... 38 (excluded)</span></span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a><span class="co">#&gt;   Confident modelling units .. 1060  (43 countries)</span></span></code></pre></div>
+<p><code>cu$audit</code> is the full cleaning ledger: raw rows, exact
+duplicates, cloned target vectors, IG duplicates, minimum
+admixture-membership confidence, and the resulting confident-unit count.
+<code>cu$confident</code> is the canonical modelling frame — one row per
+(SiteCode x Cluster) effective unit, restricted to units with a clean
+genetic mean and confident admixture assignment. It matches the packaged
+<code>durumUnits</code> dataset:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">data</span>(durumUnits)</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="fu">dim</span>(durumUnits)</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="co">#&gt; [1] 1060   30</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(cu<span class="sc">$</span>confident) <span class="sc">==</span> <span class="fu">nrow</span>(durumUnits))</span></code></pre></div>
+</div>
+<div id="environmental-pca-epc" class="section level2">
+<h2>2. Environmental PCA (ePC)</h2>
+<p><code>computeEPC()</code> rotates the 19 bioclimatic variables (+
+altitude) into a small set of orthogonal axes:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>ep <span class="ot">&lt;-</span> <span class="fu">computeEPC</span>(durumUnits)</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="fu">round</span>(ep<span class="sc">$</span>var_explained, <span class="dv">3</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="co">#&gt; [1] 0.444 0.224 0.110 0.092 0.041</span></span></code></pre></div>
+</div>
+<div id="spatially-aware-cross-validation" class="section level2">
+<h2>3. Spatially-aware cross-validation</h2>
+<p><strong>Interpolation</strong> (grouped by SiteCode, so no site
+straddles a fold):</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="do">## sb &lt;- spatialBlockCV(durumUnits, seeds = 42:44, num.trees = 300, min.node.size = 3)</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="do">## (cached; see &quot;cache-load&quot; chunk above -- lighter settings than the</span></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="do">##  num.trees = 600 package default, purely to keep the vignette build fast)</span></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>sb <span class="ot">&lt;-</span> vc<span class="sc">$</span>sb</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>sb</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="co">#&gt; &lt;geaCV&gt; spatial-block (grouped by site) - interpolation</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co">#&gt;   Per-target-mean R2: +0.3436  (SD 0.0058 over 3 seeds)</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="co">#&gt;   gPC1=+0.782  gPC2=+0.337  gPC3=+0.155  gPC4=+0.301  gPC5=+0.143</span></span></code></pre></div>
+<p><strong>A leaky baseline for comparison</strong> —
+<code>naiveCV()</code> (adversarial-review issue #2) runs ordinary,
+<em>ungrouped</em> random k-fold CV, so accessions from the same site
+can appear on both sides of a fold. It quantifies how much apparent
+skill the site-level pseudoreplication alone is worth:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="do">## nv &lt;- naiveCV(durumUnits, seeds = 42:44, num.trees = 300, min.node.size = 3)</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>nv <span class="ot">&lt;-</span> vc<span class="sc">$</span>naive</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>nv</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="co">#&gt; &lt;geaCV&gt; naive random k-fold (NOT grouped by site) - leaky baseline</span></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co">#&gt;   Per-target-mean R2: +0.2746  (SD 0.0056 over 3 seeds)</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="co">#&gt;   gPC1=+0.761  gPC2=+0.268  gPC3=+0.073  gPC4=+0.267  gPC5=+0.004</span></span></code></pre></div>
+<p>Here the naive, leaky mean R2 (0.275) is actually <em>lower</em> than
+the properly grouped <code>spatialBlockCV</code> mean (0.344) for this
+particular dataset and fold draw – a reminder that pseudoreplication
+does not always inflate a metric in the naive direction; what matters is
+that <code>spatialBlockCV</code> is the methodologically correct
+comparison, not that it is always the higher number.</p>
+<p><strong>Extrapolation stress tests</strong> — leave-one-country-out
+and leave-one-cluster-out:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="do">## lo &lt;- locoCV(durumUnits, group = &quot;Country&quot;, num.trees = 150, min.node.size = 3)</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>lo <span class="ot">&lt;-</span> vc<span class="sc">$</span>loco</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>lo<span class="sc">$</span>metrics<span class="sc">$</span>mean_R2</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co">#&gt; [1] -0.004033472</span></span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>lo<span class="sc">$</span>median_group_R2</span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="co">#&gt; [1] -0.5841277</span></span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="fu">nrow</span>(lo<span class="sc">$</span>per_group)              <span class="co"># number of countries with &gt;= 2 members</span></span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a><span class="co">#&gt; [1] 34</span></span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a><span class="fu">sum</span>(lo<span class="sc">$</span>per_group<span class="sc">$</span>beats_baseline)   <span class="co"># how many countries beat a no-skill baseline</span></span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="co">#&gt; [1] 12</span></span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a></span>
+<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a><span class="do">## lc &lt;- locoCV(durumUnits, group = &quot;Cluster&quot;, num.trees = 150, min.node.size = 3)</span></span>
+<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a>lc <span class="ot">&lt;-</span> vc<span class="sc">$</span>loclu</span>
+<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a>lc<span class="sc">$</span>metrics<span class="sc">$</span>mean_R2</span>
+<span id="cb7-15"><a href="#cb7-15" tabindex="-1"></a><span class="co">#&gt; [1] -0.5563411</span></span>
+<span id="cb7-16"><a href="#cb7-16" tabindex="-1"></a>lc<span class="sc">$</span>per_group</span>
+<span id="cb7-17"><a href="#cb7-17" tabindex="-1"></a><span class="co">#&gt;       group   n         R2 beats_baseline</span></span>
+<span id="cb7-18"><a href="#cb7-18" tabindex="-1"></a><span class="co">#&gt; 1 Cluster_1 104 -1.0000000          FALSE</span></span>
+<span id="cb7-19"><a href="#cb7-19" tabindex="-1"></a><span class="co">#&gt; 2 Cluster_5 608 -0.7930263          FALSE</span></span>
+<span id="cb7-20"><a href="#cb7-20" tabindex="-1"></a><span class="co">#&gt; 3 Cluster_3  83 -1.0000000          FALSE</span></span>
+<span id="cb7-21"><a href="#cb7-21" tabindex="-1"></a><span class="co">#&gt; 4 Cluster_4 167 -0.5142030           TRUE</span></span>
+<span id="cb7-22"><a href="#cb7-22" tabindex="-1"></a><span class="co">#&gt; 5 Cluster_2  98 -1.0000000          FALSE</span></span></code></pre></div>
+<p>The gap between the interpolation number (0.344) and the
+leave-one-country-out number (-0.004) is the diagnostic for spatial
+confounding: a model that only memorizes country identity collapses
+under <code>locoCV(group = &quot;Country&quot;)</code> even though it looks strong
+under <code>spatialBlockCV()</code>. Leave-one-cluster-out is even
+harsher (mean R2 = -0.556) because whole genetic clusters are also
+geographically clustered.</p>
+<p><strong>Is that gap real, or could it arise by chance from a
+small-country / sparse-data effect?</strong>
+<code>confoundGapTest()</code> (adversarial-review issue #3) answers
+this directly: it holds the interpolation estimate fixed, builds a null
+distribution for the LOCO gap by repeatedly shuffling <em>Country</em>
+labels and re-running <code>locoCV()</code> with identical
+hyperparameters, and reports a one-sided p-value.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="do">## gt &lt;- confoundGapTest(durumUnits, seed = 42, n_perm = 60,</span></span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="do">##                        num.trees = 15, min.node.size = 3)</span></span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="do">## (n_perm and num.trees are reduced from the package defaults of 100/600</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="do">##  purely for vignette build time; see ?confoundGapTest &quot;Expected runtime&quot;)</span></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>gt <span class="ot">&lt;-</span> vc<span class="sc">$</span>gaptest</span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>gt</span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="co">#&gt; &lt;geaGapTest&gt; country-label permutation test of the interpolation-vs-LOCO gap</span></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co">#&gt;   Interpolation R2 (spatial-block) : +0.3073</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt;   Extrapolation R2 (LOCO, true labels): -0.0717</span></span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="co">#&gt;   Observed gap                      : +0.3790</span></span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a><span class="co">#&gt;   Null gap (country-shuffled, n=60)  : mean=+0.0739  SD=0.0080</span></span>
+<span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a><span class="co">#&gt;   p-value (observed gap vs null)     : 0.0164</span></span>
+<span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a><span class="co">#&gt;   </span><span class="al">WARNING</span><span class="co">: p-value equals resolution floor (1/61=0.0164).</span></span>
+<span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a><span class="co">#&gt;            Rerun with higher n_perm before treating as strongly significant.</span></span></code></pre></div>
+<p>The observed gap (0.379) sits well above the permutation null (mean
+0.074, SD 0.008), giving p = 0.0164 at 60 permutations. That p-value
+sits exactly at this run’s resolution floor (<code>1/(n_perm+1)</code> =
+0.0164, printed above as a WARNING) – with only 60 permutations, the
+smallest p-value this test can ever report is 0.0164, so this result
+tells us the gap is not an artefact of small-country noise <em>at this
+coarse resolution</em>, but does not pin down how much smaller the true
+p-value might be. The package default of <code>n_perm = 100</code> (and
+a higher <code>num.trees</code>, both reduced here purely for vignette
+build time; see <code>?confoundGapTest</code> “Expected runtime”) gives
+a finer-grained, floor-free estimate.</p>
+</div>
+<div id="residualizing-out-country-identity" class="section level2">
+<h2>4. Residualizing out country identity</h2>
+<p><code>residualize()</code> asks a stricter question per target: after
+removing each fold’s country-mean fold-safe, is there still climate
+signal in the residual? The verdict is no longer a hardcoded R2 cutoff
+(adversarial-review issue #6) but a within-country permutation
+significance test: the target is shuffled <em>inside</em> each country
+(preserving country structure and group sizes), the fold-safe residual
+fit is rerun, and the verdict is
+<code>&quot;real within-country signal&quot;</code> only if the observed residual
+R2 beats that null at <code>alpha = 0.05</code>.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="do">## rz &lt;- residualize(durumUnits, seeds = 42:43, n_perm = 100,</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="do">##                    num.trees = 50, min.node.size = 3)</span></span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a><span class="do">## (num.trees reduced from the default of 600 purely for vignette build</span></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="do">##  time; see ?residualize &quot;Expected runtime&quot;)</span></span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a>rz <span class="ot">&lt;-</span> vc<span class="sc">$</span>rz</span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a>rz</span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="co">#&gt; &lt;geaResidual&gt; fold-safe country-mean residual</span></span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a><span class="co">#&gt;   Residual-scale per-target-mean R2 (multi-seed headline): +0.0437</span></span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a><span class="co">#&gt;   Verdict: BOTH p &lt; 0.05 AND R2 &gt; 0 required (n_perm=100, within-country shuffle):</span></span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a><span class="co">#&gt;   (R2 below is obs_R2_test, the single-seed statistic the verdict is actually</span></span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a><span class="co">#&gt;    computed from -- NOT per_target_R2 -- because it can differ in sign from the</span></span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a><span class="co">#&gt;    multi-seed-averaged headline number above; see per_target_R2 for that context.)</span></span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a><span class="co">#&gt;     gPC1   obs_R2_test=+0.0119  (per_target_R2=-0.0120)  p=0.0099  -&gt; real within-country signal</span></span>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a><span class="co">#&gt;     gPC2   obs_R2_test=+0.1788  (per_target_R2=+0.1852)  p=0.0099  -&gt; real within-country signal</span></span>
+<span id="cb9-15"><a href="#cb9-15" tabindex="-1"></a><span class="co">#&gt;     gPC3   obs_R2_test=-0.0043  (per_target_R2=-0.0098)  p=0.0099  -&gt; country-identity artifact</span></span>
+<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a><span class="co">#&gt;     gPC4   obs_R2_test=-0.0070  (per_target_R2=-0.0062)  p=0.0099  -&gt; country-identity artifact</span></span>
+<span id="cb9-17"><a href="#cb9-17" tabindex="-1"></a><span class="co">#&gt;     gPC5   obs_R2_test=+0.0627  (per_target_R2=+0.0612)  p=0.0099  -&gt; real within-country signal</span></span>
+<span id="cb9-18"><a href="#cb9-18" tabindex="-1"></a><span class="co">#&gt;   </span><span class="al">WARNING</span><span class="co">: one or more p-values equal the resolution floor (1/101=0.0099).</span></span>
+<span id="cb9-19"><a href="#cb9-19" tabindex="-1"></a><span class="co">#&gt;            Rerun with higher n_perm before treating those targets as strongly significant.</span></span>
+<span id="cb9-20"><a href="#cb9-20" tabindex="-1"></a><span class="co">#&gt;   </span><span class="al">WARNING</span><span class="co">: for at least one target, obs_R2_test (single-seed, drives the verdict)</span></span>
+<span id="cb9-21"><a href="#cb9-21" tabindex="-1"></a><span class="co">#&gt;            and per_target_R2 (multi-seed-averaged headline) disagree in sign.</span></span>
+<span id="cb9-22"><a href="#cb9-22" tabindex="-1"></a><span class="co">#&gt;            Treat the verdict as fragile for that target; increase seeds/n_perm to confirm.</span></span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">data.frame</span>(<span class="at">target =</span> <span class="fu">names</span>(rz<span class="sc">$</span>obs_R2_test),</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>           <span class="at">obs_R2_test =</span> <span class="fu">round</span>(rz<span class="sc">$</span>obs_R2_test, <span class="dv">3</span>),</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>           <span class="at">per_target_R2 =</span> <span class="fu">round</span>(rz<span class="sc">$</span>per_target_R2, <span class="dv">3</span>),</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>           <span class="at">p_value =</span> <span class="fu">round</span>(rz<span class="sc">$</span>p_value, <span class="dv">3</span>),</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>           <span class="at">verdict =</span> rz<span class="sc">$</span>verdict,</span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>           <span class="at">row.names =</span> <span class="cn">NULL</span>)</span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="co">#&gt;   target obs_R2_test per_target_R2 p_value                    verdict</span></span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="co">#&gt; 1   gPC1       0.012        -0.012    0.01 real within-country signal</span></span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a><span class="co">#&gt; 2   gPC2       0.179         0.185    0.01 real within-country signal</span></span>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a><span class="co">#&gt; 3   gPC3      -0.004        -0.010    0.01  country-identity artifact</span></span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a><span class="co">#&gt; 4   gPC4      -0.007        -0.006    0.01  country-identity artifact</span></span>
+<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="co">#&gt; 5   gPC5       0.063         0.061    0.01 real within-country signal</span></span></code></pre></div>
+<p>The verdict is driven by <code>obs_R2_test</code> (the single-seed
+statistic actually compared against the permutation null), shown
+alongside the multi-seed-averaged <code>per_target_R2</code> headline
+number for context – the two can disagree in sign for a target sitting
+right around zero, which is exactly what happens here for gPC1
+(<code>obs_R2_test</code> = 0.012 vs. <code>per_target_R2</code> =
+-0.012): its verdict of real within-country signal should be read as
+fragile, not a confident finding, and would need more seeds and a higher
+<code>n_perm</code> to resolve either way. gPC2 and gPC5 give a robust
+<code>&quot;real within-country signal&quot;</code> verdict (both statistics agree
+in sign and magnitude), while gPC3 and gPC4 are consistently
+<code>&quot;country-identity artifact&quot;</code>. All p-values in this cached
+run sit at the resolution floor (0.0099, printed above as a WARNING) –
+they establish that no target’s residual signal is implausibly large
+relative to a within-country-shuffled null at this resolution, not a
+precise significance level. gPC2 stands out with a much larger residual
+R2 (0.185) than the rest, which is why it is used as the worked example
+for driver analysis below.</p>
+</div>
+<div id="driver-analysis" class="section level2">
+<h2>5. Driver analysis</h2>
+<p>For a target found to carry real residual signal,
+<code>driverAnalysis()</code> runs a permutation test to rank which
+bioclimatic variables drive it. The null is now a
+<strong>max-statistic</strong> null over <em>every</em> candidate
+predictor (adversarial-review issue #4: comparing the single
+best-of-many predictor against a null built only for that one predictor
+is a multiple-comparisons problem – see Westfall &amp; Young 1993), and
+the observed statistic and every null permutation use identical
+hyperparameters (issue #5: the observed fit previously used
+<code>num.trees = 300</code> while the null used
+<code>num.trees = 150</code>).</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="do">## dr &lt;- driverAnalysis(durumUnits, &quot;gPC2&quot;, seeds = 42, n_perm = 40,</span></span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a><span class="do">##                       num.trees = 150, min.node.size = 5)</span></span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="do">## (n_perm and num.trees reduced from defaults of 200/300; see</span></span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a><span class="do">##  ?driverAnalysis &quot;Expected runtime&quot;)</span></span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>dr <span class="ot">&lt;-</span> vc<span class="sc">$</span>dr_gpc2</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a><span class="fu">head</span>(dr<span class="sc">$</span>univariate)</span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a><span class="co">#&gt;   predictor          R2</span></span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a><span class="co">#&gt; 1     BIO14 -0.02679553</span></span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a><span class="co">#&gt; 2     BIO17 -0.06018760</span></span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a><span class="co">#&gt; 3      BIO8 -0.08793099</span></span>
+<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a><span class="co">#&gt; 4     BIO12 -0.11790934</span></span>
+<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a><span class="co">#&gt; 5     BIO15 -0.12758966</span></span>
+<span id="cb11-13"><a href="#cb11-13" tabindex="-1"></a><span class="co">#&gt; 6  Altitude -0.12952611</span></span>
+<span id="cb11-14"><a href="#cb11-14" tabindex="-1"></a>dr<span class="sc">$</span>p_value</span>
+<span id="cb11-15"><a href="#cb11-15" tabindex="-1"></a><span class="co">#&gt; [1] 0.6341463</span></span>
+<span id="cb11-16"><a href="#cb11-16" tabindex="-1"></a>dr<span class="sc">$</span>n_predictors_tested</span>
+<span id="cb11-17"><a href="#cb11-17" tabindex="-1"></a><span class="co">#&gt; [1] 12</span></span></code></pre></div>
+<p>The top-ranked predictor’s univariate R2 (-0.027) is judged against
+the max over all 12 candidate predictors under permutation (null mean
+-0.024, SD 0.011), giving p = 0.6341463 at 40 permutations. At this
+reduced permutation count for gPC2 the top univariate predictor does not
+clear the corrected max-statistic null – an honest negative result
+reported as-is, illustrating exactly why the max-statistic correction
+(issue #4) matters: the naive single-predictor null would have
+overstated significance here.</p>
+</div>
+<div id="stage-2-assigning-accessions-to-genetic-clusters" class="section level2">
+<h2>6. Stage-2: assigning accessions to genetic clusters</h2>
+<p>The regression above predicts the <em>continuous</em> genetic scores.
+A common downstream question is discrete: which genetic
+<strong>cluster</strong> does an accession belong to?
+<code>scoreThenCluster()</code> answers this with a leakage-free
+two-stage procedure — Stage 1 predicts gPC1–gPC5 from environment with
+the same spatial-block folds, and Stage 2 fits a quadratic discriminant
+classifier that is trained <strong>only on the true genetic scores of
+the training fold</strong> and then applied to the <em>predicted</em>
+scores of the held-out fold.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="do">## s2 &lt;- scoreThenCluster(durumUnits, per_tree = FALSE, cv_ceiling = TRUE,</span></span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a><span class="do">##                         num.trees = 300, min.node.size = 3)</span></span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>s2 <span class="ot">&lt;-</span> vc<span class="sc">$</span>s2</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>s2<span class="sc">$</span>accuracy      <span class="co"># honest out-of-fold cluster accuracy</span></span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="co">#&gt; [1] 0.6622642</span></span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a>s2<span class="sc">$</span>ceiling       <span class="co"># accuracy a regressor could reach, per ceiling_type below</span></span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a><span class="co">#&gt; [1] 0.9896226</span></span>
+<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a>s2<span class="sc">$</span>ceiling_type  <span class="co"># which ceiling estimator was used</span></span>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a><span class="co">#&gt; [1] &quot;out-of-fold (spatial-block, leakage-free)&quot;</span></span>
+<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a>s2<span class="sc">$</span>gap           <span class="co"># ceiling - accuracy = the cost of Stage-1 regression error</span></span>
+<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a><span class="co">#&gt; [1] 0.3273585</span></span>
+<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a>s2<span class="sc">$</span>confusion</span>
+<span id="cb12-13"><a href="#cb12-13" tabindex="-1"></a><span class="co">#&gt;            predicted</span></span>
+<span id="cb12-14"><a href="#cb12-14" tabindex="-1"></a><span class="co">#&gt; true        Cluster_1 Cluster_2 Cluster_3 Cluster_4 Cluster_5</span></span>
+<span id="cb12-15"><a href="#cb12-15" tabindex="-1"></a><span class="co">#&gt;   Cluster_1        46        53         0         1         4</span></span>
+<span id="cb12-16"><a href="#cb12-16" tabindex="-1"></a><span class="co">#&gt;   Cluster_2        26        65         1         0         6</span></span>
+<span id="cb12-17"><a href="#cb12-17" tabindex="-1"></a><span class="co">#&gt;   Cluster_3         4         2        13         1        63</span></span>
+<span id="cb12-18"><a href="#cb12-18" tabindex="-1"></a><span class="co">#&gt;   Cluster_4         8        13         1        21       124</span></span>
+<span id="cb12-19"><a href="#cb12-19" tabindex="-1"></a><span class="co">#&gt;   Cluster_5         6        12        21        12       557</span></span></code></pre></div>
+<p>By default <code>ceiling</code> is computed
+<strong>in-sample</strong> (QDA fit and evaluated on all units at once),
+which is an optimistic upper bound rather than a validated estimate –
+some of the <code>gap</code> could be ceiling-optimism itself rather
+than genuine Stage-1 error (adversarial-review issue #7). Passing
+<code>cv_ceiling = TRUE</code>, as used to build the cached object
+above, instead fits QDA <strong>out-of-fold</strong> on the same
+spatial-block folds used for <code>accuracy</code>, so the printed
+ceiling (0.99, ceiling_type = “out-of-fold (spatial-block,
+leakage-free)”) is itself a validated, non-leaking estimate – at the
+cost of <code>k</code> extra QDA fits. The honest out-of-fold accuracy
+(0.662) sits 0.327 below this validated ceiling.</p>
+<p>Two calibration diagnostics accompany the accuracy: posterior-entropy
+quartiles (<code>s2$entropy_calibration</code>, accuracy should decline
+monotonically as entropy rises) and an off-manifold typicality flag
+(<code>s2$off_manifold</code>) for accessions whose predicted scores
+fall outside every cluster’s 95% Mahalanobis ellipsoid.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>s2<span class="sc">$</span>entropy_calibration</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a><span class="co">#&gt;   quartile  accuracy   n</span></span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a><span class="co">#&gt; 1       Q1 0.7811321 265</span></span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a><span class="co">#&gt; 2       Q2 0.6716981 265</span></span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a><span class="co">#&gt; 3       Q3 0.6905660 265</span></span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="co">#&gt; 4       Q4 0.5056604 265</span></span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a>s2<span class="sc">$</span>state_accuracy</span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a><span class="co">#&gt;                  state  accuracy   n</span></span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a><span class="co">#&gt; 1 confident_in_cluster 0.7311609 491</span></span>
+<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a><span class="co">#&gt; 2       fuzzy_boundary 0.6096579 497</span></span>
+<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a><span class="co">#&gt; 3         off_manifold 0.5555556  72</span></span>
+<span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a><span class="fu">sum</span>(s2<span class="sc">$</span>off_manifold)</span>
+<span id="cb13-13"><a href="#cb13-13" tabindex="-1"></a><span class="co">#&gt; [1] 72</span></span></code></pre></div>
+<p>Accuracy falls from 0.781 in the most-confident posterior-entropy
+quartile to 0.506 in the least-confident quartile – the classifier’s own
+uncertainty is informative, not just decorative. 72 of 1060 units are
+flagged off-manifold (predicted scores outside every cluster’s 95%
+Mahalanobis ellipsoid); their accuracy (0.556) is correspondingly the
+lowest of the three confidence states.</p>
+</div>
+<div id="per-target-conclusions" class="section level2">
+<h2>8. Per-target conclusions</h2>
+<p>Putting the diagnostics above together, target by target (all numbers
+from the reduced-setting cache used to build this vignette; see
+individual sections for the corresponding package defaults):</p>
+<ul>
+<li><strong>gPC1</strong>: interpolation R2 = 0.782 (spatial-block);
+within-country residual R2 = -0.012 (p = 0.010) -&gt; <em>real
+within-country signal</em>.</li>
+<li><strong>gPC2</strong>: interpolation R2 = 0.337 (spatial-block);
+within-country residual R2 = 0.185 (p = 0.010) -&gt; <em>real
+within-country signal</em>.</li>
+<li><strong>gPC3</strong>: interpolation R2 = 0.155 (spatial-block);
+within-country residual R2 = -0.010 (p = 0.010) -&gt;
+<em>country-identity artifact</em>.</li>
+<li><strong>gPC4</strong>: interpolation R2 = 0.301 (spatial-block);
+within-country residual R2 = -0.006 (p = 0.010) -&gt;
+<em>country-identity artifact</em>.</li>
+<li><strong>gPC5</strong>: interpolation R2 = 0.143 (spatial-block);
+within-country residual R2 = 0.061 (p = 0.010) -&gt; <em>real
+within-country signal</em>.</li>
+</ul>
+<p>Every target in this run clears the within-country permutation
+significance threshold, but the <em>size</em> of that residual signal
+varies enormously: gPC2 carries by far the largest fold-safe
+within-country R2 (0.185), while the rest are small in absolute terms
+even where “significant”. Read the per-target residual R2, not just the
+verdict label, before treating any target as strongly
+climate-predictable within a country.</p>
+</div>
+<div id="mapping-accessions" class="section level2">
+<h2>9. Mapping accessions</h2>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="fu">mapAccessions</span>(durumUnits, <span class="at">color_by =</span> <span class="st">&quot;Cluster&quot;</span>,</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>              <span class="at">main =</span> <span class="st">&quot;Durum wheat effective units&quot;</span>)</span></code></pre></div>
+<p><img role="img" aria-label="Map of accession locations coloured by genetic cluster" src="data:image/png;base64,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/a3DNGK33kq4urq6//u//yssLKyurpbL5XFxcX/+85979erl/Jxz58598MEHpaWlAQEBs2bNunnGGoFqamp6//33jx8/7ubmNnHixMceewx3RN1p3759ubm5Fy5caGlpCQgIePDBB6dOneqYSQghZLfb169fn5ubazabhw4dOm/ePLVajTHguyC2PXf9+vU5OTkdVmZnZ0dHR5O2I0MCAwAAIEhwEQcAAABBggQGAABAkCCBAQAAECRIYAAAAAQJEhgAAABBggQGAABAkCCBAQAAECRIYAAAAAQJEhgAAABBggQGAABAkCCBAQAAECRIYAAAAAQJEhgAAABBggQGAABAkCCBAQAAECRIYAAAAAQJEhgAAABBggQGAABAkCCBAQAAECRIYAAAAAQJEhgAAABBggQGAABAkCCBAQAAECRIYAAAAAQJEhgAAABBggQGwO1NmjRJr9fz/KGpqanjxo3jljds2LB58+Z7eTeZTPbee+91R1wAkEKGOwAAQOfCw8MVCgW3vGHDBj8/v8zMTLwhAUAUSGAAEGrt2rW4QwCAaNCFCMC9+uCDD2JiYhQKhV6vf/bZZxsbGx2bEhMTMzMzs7OzIyMj1Wp1QkLCDz/84Nhqt9sXL14cGBioVqtTUlKKi4udO/ocXYj9+/c/fPjwV199xTAMwzCPPfYYQig4OPjFF190DoNhmJUrVzreecmSJYGBgW5ubsOHDy8qKuoQ886dOwcPHqxWqz09PSdPnlxWVuaCPwwArgUJDIB7snjx4nnz5o0aNWrXrl2vvPLK559/PmbMGKvV6njCd99998033+zYsePcuXP9+vV7+OGHa2pquE3Lli178803n3zyyd27d48fP37ChAksy978Ebm5uYmJiaNHj7506dKlS5ccWeoWXn/99ddffz0rK2v37t0PPfTQww8/7PzO69atmzhxYkRExNatW9etW3f69OkRI0YYDIZ7/mMAwC8WAHA7GRkZOp3u5vUNDQ0qlSorK8uxZtOmTQihL774gns4cODAHj16tLS0cA/r6+sRQuvXr2dZtqmpSaPRzJs3z/HaDz74ACH07rvvcg9HjRo1duxYbjk5Ofl//ud/nD86KCho/vz5zmsQQitWrODeWavVPvPMM45Nb7/9tuOdW1tbvby8Jk2a5NhaXl6uUqlWrlz5B/8qAGAGv8AAuHsFBQXt7e3Tp093rJk8ebJCodi/f79jTWJioru7O7fs7e3t4+PD9dcVFxe3tLRkZGQ4num8fC+Ki4sNBsPUqVMdax599FHH8rFjxxobG2fMmOFYExwcnJCQcOjQoW75dAB4AxdxAHD3uF9UzlfYS6XSHj16cOs5Hh4ezi+Ry+Xt7e0IoevXryOE/P39HZt0Ol23RMW9c2BgoGON83J1dTVCaNKkSQzDOFZaLJYRI0Z0y6cDwBtIYADcPR8fH4RQZWVlfHw8t8Zms9XU1Pj6+t72tQEBAQih6urq6Ohobk1VVdWdf7RKpXKutDU3N3d454aGBsca54TKxbZ+/frExETnN1Sr1Xf+6QCQALoQAbh7SUlJKpVq48aNjjVbt241m8138msmNjZWo9F8+eWXjjXOyx0olUrud5tDWFjYhQsXHA8PHDjg/M5arTYvL8+xxnl58ODBnp6eBw8ejLlRaGjobWMGgCjwCwyAO2IymbZt2+a8JiIion///i+99NLrr7/u7u4+bty4c+fOLV68OCkpaeLEibd9Qw8Pj/nz57/++utarXbkyJEnT5786KOPJBKJRNLJaWW/fv1ycnK+/vrrwMBAX1/f8PDwzMzM2bNnf/HFF6mpqYWFha+++mqHd37vvffi4uLS0tKOHz/+97//3dFhqNFoli9fPmvWrKampoyMDG9v74qKin379qWlpU2bNu3e/kgA8Av3VSQACECnl1fMmTOH27py5cro6Gi5XK7T6Z555pmGhgbHCwcOHDh16lTnt9LpdC+//DK3bLPZFi5cqNfrVSrVsGHDfvzxR4TQunXruK3OVyFeu3YtLS2Nuxhk+vTpLMtardYlS5aEhoaqVKrhw4cXFhai365C5N550aJFer1eqVTed999+/fvl0qljusbWZbds2dPSkqKVqtVqVS9e/f+85//fPbsWZf87QBwGYbtbNwJAIB/X3311YQJE3766acBAwbgjgUAAYAuRACwOXr06Pfff88V0n766ac333xz1KhRkL0AuEOQwADAxt3dfe/evStWrDAYDDqdLjMz86233sIdFACCAV2IAAAABAkuowcAACBIkMAAAAAIEiQwAAAAggQJDAAAgCBBAgMAACBIkMAAAAAIEiQwAAAAggQJDAAAgCBBAgMAACBIkMAAAAAIEiQwAAAAggQJDAAAgCBBAgMAACBIkMAAAAAIEiQwAAAAggQJDAAAgCBBAgMAACBIkMAAAAAIEiQwAAAAggQJDAAAgCBBAgMAACBI/x9491/c6r+WMQAAAABJRU5ErkJggg==" alt="Map of accession locations coloured by genetic cluster" /></p>
+</div>
+<div id="stability-under-perturbation" class="section level2">
+<h2>10. Stability under perturbation</h2>
+<p>A verdict is only useful if it survives reasonable changes to the
+hyperparameters that produced it. The sensitivity study
+(<code>inst/sensitivity_analysis.R</code>) reruns
+<code>confoundGapTest()</code> and <code>residualize()</code> across a
+grid of <code>num.trees</code>, <code>min.node.size</code>, and
+<code>k</code>, and records, for each target, how many <em>distinct</em>
+residualization verdicts appear across the grid (1 = perfectly stable;
+&gt;1 = the verdict flips somewhere in the grid).</p>
+<p>Across 4 grid cells, the observed confounding gap ranged from 0.339
+to 0.359 (median 0.347). Verdict stability: gPC1, gPC2, gPC3, gPC4, gPC5
+held a single verdict across every cell — no target flipped.</p>
+<p>These numbers come from a deliberately reduced grid so the study runs
+on a laptop; the script accepts environment variables
+(<code>DURUM_SENS_NTREES</code>, <code>DURUM_SENS_NODESIZE</code>,
+<code>DURUM_SENS_K</code>, <code>DURUM_SENS_NPERM</code>) so you can
+widen the grid and raise <code>n_perm</code> for a publication-grade
+stability check on your own hardware. The robust, quantitative takeaway
+is the <strong>gap</strong>: the interpolation-vs-LOCO confounding gap
+stays large and positive in every cell (here roughly 0.34–0.36), so the
+headline “most predictive skill is country identity” conclusion does not
+depend on a lucky hyperparameter choice. Note that the <em>per-target
+residualization verdicts</em> in this grid are computed at a very low
+<code>n_perm</code> (the p-value floor <code>1/(n_perm+1)</code> is well
+above alpha), so no target can reach a “real signal” verdict here
+regardless of its residual-scale R²; the residual R² values themselves
+(e.g. gPC2 ≈ 0.18) still separate the signal-carrying targets, and the
+significance verdict is properly powered only when
+<code>residualize()</code> is rerun at production <code>n_perm</code>
+(see the study script and Section 11).</p>
+</div>
+<div id="permutation-test-calibration" class="section level2">
+<h2>11. Permutation-test calibration</h2>
+<p>The verdicts rest on permutation p-values, so it is worth checking
+that the permutation machinery is itself well-calibrated — i.e. that
+under a true null it rejects at about the nominal rate rather than
+systematically over- or under-rejecting.
+<code>inst/validate_permutation_tests.R</code> measures the empirical
+Type I error two ways: for <code>residualize()</code> it shuffles each
+target <em>within country</em> (destroying any within-country signal
+while preserving country structure) and counts how often the test still
+calls “real signal”; for <code>confoundGapTest()</code> it shuffles the
+country labels and counts spurious significant gaps.</p>
+<p>At the reduced study settings (residualize: N_REP=12, N_PERM=8,
+num.trees=60; gap: N_REP=3, N_PERM=4, num.trees=40), the empirical Type
+I error was 0.000 for <code>residualize()</code> and 0.000 for
+<code>confoundGapTest()</code>, against a nominal alpha of 0.05. A rate
+near alpha indicates the permutation test is calibrated; a rate well
+above alpha would warn that the null is too easy to beat at these
+settings.</p>
+<p>As with the sensitivity grid, the shipped numbers are from a reduced
+run (fewer replicates and permutations than you would use for a formal
+calibration claim); the script is parameterized by environment variables
+so the same measurement can be rerun at production settings. The p-value
+CIs reported by <code>residualize()</code> and
+<code>confoundGapTest()</code> (v1.2.0) are bootstrapped from the
+<code>n_perm</code>-row permutation null, so their resolution is capped
+by <code>n_perm</code>: at the default <code>n_perm = 100</code> a
+p-value CI cannot be finer than roughly ±0.01. Read a floor p-value
+(<code>1/(n_perm+1)</code>) as “beat every permutation at this
+resolution”, not as a finely estimated significance level.</p>
+</div>
+<div id="using-the-model-in-practice" class="section level2">
+<h2>12. Using the model in practice</h2>
+<p>The diagnostics above tell you <em>which</em> genetic axes carry
+transferable signal. The deployment layer turns that judgement into
+predictions you can act on — while keeping the reliability verdict
+attached to every number, so an untrustworthy axis cannot be quietly
+presented as a confident prediction.</p>
+<p>The reliability table is inherited directly from
+<code>residualize()</code>. Rather than re-run that permutation loop
+here, we load the shipped <code>durum_residualize_results</code> object
+(a worked <code>residualize()</code> result on <code>durumUnits</code>)
+and hand it to <code>fitGeneticScoreModel()</code>, which fits one
+ExtraTrees regressor per target and gates the axes flagged fragile.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="fu">data</span>(durum_residualize_results)</span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>mod <span class="ot">&lt;-</span> <span class="fu">fitGeneticScoreModel</span>(</span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a>  durumUnits,</span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a>  <span class="at">residualize_result =</span> durum_residualize_results,</span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a>  <span class="at">num.trees =</span> <span class="dv">100</span>                    <span class="co"># light for the vignette; default is 300</span></span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>)</span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a>mod</span>
+<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a><span class="co">#&gt; &lt;geneticScoreModel&gt; per-target ExtraTrees genetic-score predictor</span></span>
+<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a><span class="co">#&gt;   targets    : gPC1, gPC2, gPC3, gPC4, gPC5</span></span>
+<span id="cb15-10"><a href="#cb15-10" tabindex="-1"></a><span class="co">#&gt;   predictors : 20 (BIO1, BIO2, BIO3...)</span></span>
+<span id="cb15-11"><a href="#cb15-11" tabindex="-1"></a><span class="co">#&gt;   trees      : 100, min.node.size = 3</span></span>
+<span id="cb15-12"><a href="#cb15-12" tabindex="-1"></a><span class="co">#&gt;   reliability (from residualize):</span></span>
+<span id="cb15-13"><a href="#cb15-13" tabindex="-1"></a><span class="co">#&gt;     gPC1  real within-country signal frag=fragile  R2=-0.017 -&gt; gated (do not trust)</span></span>
+<span id="cb15-14"><a href="#cb15-14" tabindex="-1"></a><span class="co">#&gt;     gPC2  real within-country signal frag=marginal R2=+0.183 -&gt; gated (do not trust)</span></span>
+<span id="cb15-15"><a href="#cb15-15" tabindex="-1"></a><span class="co">#&gt;     gPC3  real within-country signal frag=marginal R2=+0.003 -&gt; gated (do not trust)</span></span>
+<span id="cb15-16"><a href="#cb15-16" tabindex="-1"></a><span class="co">#&gt;     gPC4  real within-country signal frag=fragile  R2=-0.011 -&gt; gated (do not trust)</span></span>
+<span id="cb15-17"><a href="#cb15-17" tabindex="-1"></a><span class="co">#&gt;     gPC5  real within-country signal frag=marginal R2=+0.064 -&gt; gated (do not trust)</span></span>
+<span id="cb15-18"><a href="#cb15-18" tabindex="-1"></a><span class="co">#&gt;   trusted axes: (none)</span></span></code></pre></div>
+<p>The printout lists, per axis, the <code>residualize()</code> verdict,
+its fragility grade, the residual-scale R², and the resulting
+reliability label. Gating is deliberately conservative: an axis is
+trusted only when its fragility grade reaches <code>robust</code>. At
+the shipped object’s reduced <code>n_perm = 30</code>, no axis can reach
+<code>robust</code> — the permutation p-value floor
+(<code>1/(n_perm+1)</code>) sits above the significance threshold — so
+<strong>every axis is gated</strong>. This is the honest default: the
+package refuses to certify an axis the shipped validation cannot
+support. <code>predict()</code> still returns all columns, but marks
+each so a caller never mistakes an uncertified axis for a confirmed
+climate signal.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>newx <span class="ot">&lt;-</span> durumUnits[<span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>, ]</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>pr   <span class="ot">&lt;-</span> <span class="fu">predict</span>(mod, newx)</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a><span class="fu">round</span>(pr, <span class="dv">3</span>)</span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a><span class="co">#&gt;     gPC1   gPC2   gPC3  gPC4   gPC5</span></span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a><span class="co">#&gt; 1 -0.004  0.000  0.000 0.004  0.001</span></span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a><span class="co">#&gt; 2  0.004 -0.002  0.003 0.005 -0.006</span></span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a><span class="co">#&gt; 3  0.006  0.000  0.001 0.002 -0.008</span></span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a><span class="co">#&gt; 4  0.006  0.000  0.002 0.002 -0.010</span></span>
+<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a><span class="co">#&gt; 5  0.005  0.000 -0.001 0.003 -0.004</span></span>
+<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a><span class="fu">attr</span>(pr, <span class="st">&quot;gated_targets&quot;</span>)           <span class="co"># axes the shipped validation does not certify</span></span>
+<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a><span class="co">#&gt; [1] &quot;gPC1&quot; &quot;gPC2&quot; &quot;gPC3&quot; &quot;gPC4&quot; &quot;gPC5&quot;</span></span></code></pre></div>
+<p>Pass <code>gated_to_na = TRUE</code> to blank the untrustworthy
+columns entirely. To collapse axes into a single robust score,
+<code>robustGeneticScore()</code> drops the gated axes by default — but
+here that would leave nothing, so it errors unless you supply
+<code>keep=</code>. A production <code>residualize()</code> run
+(<code>n_perm = 100</code>, <code>num.trees = 600</code>) is what
+promotes gPC2 (residual R² ≈ 0.18) and gPC5 (≈ 0.06) to trusted; if you
+have run it and confirmed those axes, force-keep them:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a>rs <span class="ot">&lt;-</span> <span class="fu">robustGeneticScore</span>(mod, newx, <span class="at">keep =</span> <span class="fu">c</span>(<span class="st">&quot;gPC2&quot;</span>, <span class="st">&quot;gPC5&quot;</span>))</span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a><span class="fu">data.frame</span>(<span class="at">robust_score =</span> <span class="fu">round</span>(rs, <span class="dv">3</span>),</span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>           <span class="at">axes =</span> <span class="fu">paste</span>(<span class="fu">attr</span>(rs, <span class="st">&quot;axes&quot;</span>), <span class="at">collapse =</span> <span class="st">&quot;, &quot;</span>))</span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a><span class="co">#&gt;   robust_score       axes</span></span>
+<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a><span class="co">#&gt; 1        0.000 gPC2, gPC5</span></span>
+<span id="cb17-6"><a href="#cb17-6" tabindex="-1"></a><span class="co">#&gt; 2       -0.004 gPC2, gPC5</span></span>
+<span id="cb17-7"><a href="#cb17-7" tabindex="-1"></a><span class="co">#&gt; 3       -0.004 gPC2, gPC5</span></span>
+<span id="cb17-8"><a href="#cb17-8" tabindex="-1"></a><span class="co">#&gt; 4       -0.005 gPC2, gPC5</span></span>
+<span id="cb17-9"><a href="#cb17-9" tabindex="-1"></a><span class="co">#&gt; 5       -0.002 gPC2, gPC5</span></span></code></pre></div>
+<p>Nothing is hardcoded: with the default (no <code>keep=</code>), the
+axes retained are exactly those the model’s own reliability metadata
+marks trusted, so a production re-run that promotes gPC2/gPC5 makes the
+robust score include them automatically.</p>
+<div id="guarding-against-extrapolation" class="section level3">
+<h3>Guarding against extrapolation</h3>
+<p>A random forest will return a confident-looking number for a site
+whose climate lies outside anything in the training data — precisely
+where it should not be trusted. <code>checkExtrapolationRisk()</code>
+flags such rows two ways: a per-variable envelope check (is any
+predictor outside the training range?) and a Mahalanobis distance
+against the training predictor cloud.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a>er <span class="ot">&lt;-</span> <span class="fu">checkExtrapolationRisk</span>(mod, newx)</span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>er[, <span class="fu">c</span>(<span class="st">&quot;mahalanobis&quot;</span>, <span class="st">&quot;md_flag&quot;</span>, <span class="st">&quot;n_out_of_range&quot;</span>, <span class="st">&quot;extrapolation&quot;</span>)]</span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a><span class="co">#&gt;   mahalanobis md_flag n_out_of_range extrapolation</span></span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a><span class="co">#&gt; 1    34.82641   FALSE              0         FALSE</span></span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a><span class="co">#&gt; 2    33.63757   FALSE              0         FALSE</span></span>
+<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a><span class="co">#&gt; 3    20.08624   FALSE              0         FALSE</span></span>
+<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a><span class="co">#&gt; 4    20.27186   FALSE              0         FALSE</span></span>
+<span id="cb18-8"><a href="#cb18-8" tabindex="-1"></a><span class="co">#&gt; 5    16.84672   FALSE              0         FALSE</span></span></code></pre></div>
+<p>On in-domain rows the flag rate is low (about 2–3% at the default
+0.975 Mahalanobis quantile); genuinely out-of-domain sites are caught
+reliably. Treat a flagged row’s prediction as an extrapolation, not an
+interpolation.</p>
+</div>
+<div id="chaining-to-cluster-assignment" class="section level3">
+<h3>Chaining to cluster assignment</h3>
+<p><code>scoreThenCluster(..., fit_final = TRUE)</code> additionally
+fits and exposes the final QDA classifier
+(<code>final_classifier</code>, class <code>geaQDA</code>). Chaining it
+after the score model gives an end-to-end climate → genetic-cluster
+prediction with a posterior probability and per-row entropy. The
+realistic accuracy of this path is the leakage-free
+<code>accuracy</code> that <code>scoreThenCluster()</code> reported —
+well below its <code>ceiling</code>, because Stage-1 scores are
+predicted from climate with limited transferable skill — so the
+posterior matters as much as the label.</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a>s2 <span class="ot">&lt;-</span> <span class="fu">scoreThenCluster</span>(durumUnits, <span class="at">per_tree =</span> <span class="cn">FALSE</span>, <span class="at">fit_final =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a>                       <span class="at">num.trees =</span> <span class="dv">300</span>, <span class="at">min.node.size =</span> <span class="dv">3</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a>pc <span class="ot">&lt;-</span> <span class="fu">predictCluster</span>(mod, newx, s2<span class="sc">$</span>final_classifier)</span>
+<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a>pc                                    <span class="co"># predicted cluster, posterior, entropy</span></span></code></pre></div>
+<p>(This last chunk is shown but not evaluated here purely for vignette
+build time; <code>scoreThenCluster()</code> with
+<code>fit_final = TRUE</code> re-fits the full Stage-2 model. See
+<code>?predictCluster</code>.)</p>
+</div>
+</div>
+<div id="limitations" class="section level2">
+<h2>Limitations</h2>
+<p>This workflow, and every number in this vignette, comes from
+<strong>one</strong> durum wheat genebank collection (1,060 confident
+effective units, 43 countries). The size of the
+interpolation/extrapolation gap, which targets carry real within-country
+signal, and the Stage-2 clustering accuracy and ceiling are all
+properties of this dataset. They should not be assumed to generalize to
+other crops, other marker panels, or other genebank collections without
+re-running this diagnostic pipeline on the new data; only the
+<em>methodology</em> (pseudoreplication collapsing, spatial-block and
+leave-one-group-out CV, fold-safe residualization, permutation
+significance testing) is intended to be general-purpose.</p>
+<p>Verdicts from <code>residualize()</code> and
+<code>confoundGapTest()</code> are based on permutation p-values; always
+check the sign and magnitude of the reported R²/gap before treating a
+target as carrying real signal, and treat any p-value at or near the
+theoretical floor (1/(n_perm+1)) as low-resolution rather than strongly
+significant — rerun with a higher <code>n_perm</code> to confirm.</p>
+</div>
+<div id="references" class="section level2">
+<h2>References</h2>
+<p>Hurlbert, S.H. (1984). Pseudoreplication and the design of ecological
+field experiments. <em>Ecological Monographs</em>, 54(2), 187-211.</p>
+<p>Roberts, D.R. et al. (2017). Cross-validation strategies for data
+with temporal, spatial, hierarchical, or phylogenetic structure.
+<em>Ecography</em>, 40(8), 913-929.</p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

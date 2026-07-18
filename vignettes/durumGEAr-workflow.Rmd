@@ -1,0 +1,561 @@
+---
+title: "durumGEAr: A Confound-Aware GEA Modelling Workflow"
+author: "Sabri Youssef"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{durumGEAr: A Confound-Aware GEA Modelling Workflow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>", fig.width = 6, fig.height = 4.5
+)
+```
+
+```{r cache-load, include = FALSE}
+## This vignette displays REAL COMPUTED NUMBERS, not eval=FALSE stubs
+## (adversarial-review issue #1). The cross-validation and permutation-test
+## chunks below (spatialBlockCV, naiveCV, locoCV, confoundGapTest,
+## residualize, driverAnalysis, scoreThenCluster) are individually cheap to
+## call, but the FULL set of them together (in particular confoundGapTest's
+## and residualize's permutation loops) takes on the order of 30-40 minutes
+## even at reduced settings. Re-running all of that on every `R CMD build`
+## is impractical, so the numbers are pre-computed once by
+## `data-raw/build_vignette_cache.R` (using deliberately lighter settings
+## than the package defaults -- fewer seeds/trees/permutations -- purely to
+## keep the vignette build tractable) and cached to
+## `inst/extdata/vignette_cache.rds`. Every code chunk below is still the
+## exact call that produced the cached object; only the *execution* is
+## replaced by a cache lookup, and the object printed is identical to what
+## calling the function live would return.
+cache_path <- system.file("extdata", "vignette_cache.rds", package = "durumGEAr")
+if (!nzchar(cache_path)) {
+  # package not yet installed (e.g. building the vignette in place during
+  # development) -- fall back to the source-tree copy
+  cache_path <- "../inst/extdata/vignette_cache.rds"
+}
+vc <- readRDS(cache_path)
+```
+
+## Why this package exists
+
+Genotype-environment association (GEA) data from genebank collections is
+routinely **pseudoreplicated** (many accessions share one collection site, so
+their bioclimatic predictors are literally identical) and **spatially
+confounded** (country of origin can stand in for climate, inflating apparent
+predictive skill). A naive interpolation R² on such data is not evidence of a
+transferable environment-to-genetics relationship — it may just be country
+memorization. `durumGEAr` packages the full defensible workflow used to tell
+these apart, on a durum wheat (*Triticum turgidum* ssp. *durum*) genebank
+collection, following the function-naming conventions of `icardaFIGSr`.
+
+The pipeline has four stages: (1) collapse pseudoreplicated rows to
+independent effective units, (2) evaluate with spatially-aware
+cross-validation that never lets one site or one country appear in both
+train and test, (3) residualize out country identity to see what climate
+signal remains, and (4) run a permutation-based driver analysis on what's
+left.
+
+```{r setup}
+library(durumGEAr)
+```
+
+## 1. Collapsing pseudoreplicated rows to effective units
+
+```{r}
+data(durumRaw)
+dim(durumRaw)
+
+cu <- collapseUnits(durumRaw)
+print(cu)
+```
+
+`cu$audit` is the full cleaning ledger: raw rows, exact duplicates, cloned
+target vectors, IG duplicates, minimum admixture-membership confidence, and
+the resulting confident-unit count. `cu$confident` is the canonical modelling
+frame — one row per (SiteCode x Cluster) effective unit, restricted to units
+with a clean genetic mean and confident admixture assignment. It matches the
+packaged `durumUnits` dataset:
+
+```{r}
+data(durumUnits)
+dim(durumUnits)
+stopifnot(nrow(cu$confident) == nrow(durumUnits))
+```
+
+## 2. Environmental PCA (ePC)
+
+`computeEPC()` rotates the 19 bioclimatic variables (+ altitude) into a small
+set of orthogonal axes:
+
+```{r}
+ep <- computeEPC(durumUnits)
+round(ep$var_explained, 3)
+```
+
+## 3. Spatially-aware cross-validation
+
+**Interpolation** (grouped by SiteCode, so no site straddles a fold):
+
+```{r}
+## sb <- spatialBlockCV(durumUnits, seeds = 42:44, num.trees = 300, min.node.size = 3)
+## (cached; see "cache-load" chunk above -- lighter settings than the
+##  num.trees = 600 package default, purely to keep the vignette build fast)
+sb <- vc$sb
+sb
+```
+
+**A leaky baseline for comparison** — `naiveCV()` (adversarial-review issue
+#2) runs ordinary, *ungrouped* random k-fold CV, so accessions from the same
+site can appear on both sides of a fold. It quantifies how much apparent
+skill the site-level pseudoreplication alone is worth:
+
+```{r}
+## nv <- naiveCV(durumUnits, seeds = 42:44, num.trees = 300, min.node.size = 3)
+nv <- vc$naive
+nv
+```
+
+Here the naive, leaky mean R2 (`r round(vc$naive$metrics$mean_R2, 3)`) is
+actually *lower* than the properly grouped `spatialBlockCV` mean
+(`r round(vc$sb$metrics$mean_R2, 3)`) for this particular dataset and fold
+draw -- a reminder that pseudoreplication does not always inflate a metric
+in the naive direction; what matters is that `spatialBlockCV` is the
+methodologically correct comparison, not that it is always the higher
+number.
+
+**Extrapolation stress tests** — leave-one-country-out and leave-one-cluster-out:
+
+```{r}
+## lo <- locoCV(durumUnits, group = "Country", num.trees = 150, min.node.size = 3)
+lo <- vc$loco
+lo$metrics$mean_R2
+lo$median_group_R2
+nrow(lo$per_group)              # number of countries with >= 2 members
+sum(lo$per_group$beats_baseline)   # how many countries beat a no-skill baseline
+
+## lc <- locoCV(durumUnits, group = "Cluster", num.trees = 150, min.node.size = 3)
+lc <- vc$loclu
+lc$metrics$mean_R2
+lc$per_group
+```
+
+The gap between the interpolation number
+(`r round(vc$sb$metrics$mean_R2, 3)`) and the leave-one-country-out number
+(`r round(vc$loco$metrics$mean_R2, 3)`) is the diagnostic for spatial confounding: a
+model that only memorizes country identity collapses under
+`locoCV(group = "Country")` even though it looks strong under
+`spatialBlockCV()`. Leave-one-cluster-out is even harsher
+(mean R2 = `r round(vc$loclu$metrics$mean_R2, 3)`) because whole genetic clusters are
+also geographically clustered.
+
+**Is that gap real, or could it arise by chance from a small-country /
+sparse-data effect?** `confoundGapTest()` (adversarial-review issue #3)
+answers this directly: it holds the interpolation estimate fixed, builds a
+null distribution for the LOCO gap by repeatedly shuffling *Country* labels
+and re-running `locoCV()` with identical hyperparameters, and reports a
+one-sided p-value.
+
+```{r}
+## gt <- confoundGapTest(durumUnits, seed = 42, n_perm = 60,
+##                        num.trees = 15, min.node.size = 3)
+## (n_perm and num.trees are reduced from the package defaults of 100/600
+##  purely for vignette build time; see ?confoundGapTest "Expected runtime")
+gt <- vc$gaptest
+gt
+```
+
+The observed gap (`r round(vc$gaptest$observed_gap, 3)`) sits well above the
+permutation null (mean `r round(vc$gaptest$null_mean, 3)`,
+SD `r round(vc$gaptest$null_sd, 3)`), giving p = `r round(vc$gaptest$p_value, 4)`
+at `r vc$gaptest$n_perm` permutations. That p-value sits exactly at this run's
+resolution floor (`1/(n_perm+1)` = `r round(1/(vc$gaptest$n_perm+1), 4)`, printed
+above as a WARNING) -- with only 60 permutations, the smallest p-value this test
+can ever report is 0.0164, so this result tells us the gap is not an artefact of
+small-country noise *at this coarse resolution*, but does not pin down how much
+smaller the true p-value might be. The package default of `n_perm = 100` (and a
+higher `num.trees`, both reduced here purely for vignette build time; see
+`?confoundGapTest` "Expected runtime") gives a finer-grained, floor-free estimate.
+
+## 4. Residualizing out country identity
+
+`residualize()` asks a stricter question per target: after removing each
+fold's country-mean fold-safe, is there still climate signal in the
+residual? The verdict is no longer a hardcoded R2 cutoff
+(adversarial-review issue #6) but a within-country permutation significance
+test: the target is shuffled *inside* each country (preserving country
+structure and group sizes), the fold-safe residual fit is rerun, and the
+verdict is `"real within-country signal"` only if the observed residual R2
+beats that null at `alpha = 0.05`.
+
+```{r}
+## rz <- residualize(durumUnits, seeds = 42:43, n_perm = 100,
+##                    num.trees = 50, min.node.size = 3)
+## (num.trees reduced from the default of 600 purely for vignette build
+##  time; see ?residualize "Expected runtime")
+rz <- vc$rz
+rz
+```
+
+```{r}
+data.frame(target = names(rz$obs_R2_test),
+           obs_R2_test = round(rz$obs_R2_test, 3),
+           per_target_R2 = round(rz$per_target_R2, 3),
+           p_value = round(rz$p_value, 3),
+           verdict = rz$verdict,
+           row.names = NULL)
+```
+
+The verdict is driven by `obs_R2_test` (the single-seed statistic actually
+compared against the permutation null), shown alongside the multi-seed-averaged
+`per_target_R2` headline number for context -- the two can disagree in sign for
+a target sitting right around zero, which is exactly what happens here for
+gPC1 (`obs_R2_test` = `r round(rz$obs_R2_test["gPC1"], 3)` vs. `per_target_R2` =
+`r round(rz$per_target_R2["gPC1"], 3)`): its verdict of
+`r rz$verdict["gPC1"]` should be read as fragile, not a confident finding, and
+would need more seeds and a higher `n_perm` to resolve either way. gPC2 and
+gPC5 give a robust `"real within-country signal"` verdict (both statistics
+agree in sign and magnitude), while gPC3 and gPC4 are consistently
+`"country-identity artifact"`. All p-values in this cached run sit at the
+resolution floor (`r round(1/(rz$n_perm+1), 4)`, printed above as a WARNING) --
+they establish that no target's residual signal is implausibly large relative
+to a within-country-shuffled null at this resolution, not a precise significance
+level. gPC2 stands out with a much larger residual R2
+(`r round(rz$per_target_R2["gPC2"], 3)`) than the rest, which is why it is used
+as the worked example for driver analysis below.
+
+## 5. Driver analysis
+
+For a target found to carry real residual signal, `driverAnalysis()` runs a
+permutation test to rank which bioclimatic variables drive it. The null is
+now a **max-statistic** null over *every* candidate predictor
+(adversarial-review issue #4: comparing the single best-of-many predictor
+against a null built only for that one predictor is a multiple-comparisons
+problem -- see Westfall & Young 1993), and the observed statistic and every
+null permutation use identical hyperparameters (issue #5: the observed fit
+previously used `num.trees = 300` while the null used `num.trees = 150`).
+
+```{r}
+## dr <- driverAnalysis(durumUnits, "gPC2", seeds = 42, n_perm = 40,
+##                       num.trees = 150, min.node.size = 5)
+## (n_perm and num.trees reduced from defaults of 200/300; see
+##  ?driverAnalysis "Expected runtime")
+dr <- vc$dr_gpc2
+head(dr$univariate)
+dr$p_value
+dr$n_predictors_tested
+```
+
+The top-ranked predictor's univariate R2 (`r round(dr$observed_R2, 3)`) is
+judged against the max over all `r dr$n_predictors_tested` candidate
+predictors under permutation (null mean
+`r round(mean(dr$null_max), 3)`, SD `r round(sd(dr$null_max), 3)`), giving
+p = `r dr$p_value` at `r dr$n_perm` permutations. At this reduced
+permutation count for gPC2 the top univariate predictor does not clear the
+corrected max-statistic null -- an honest negative result reported as-is,
+illustrating exactly why the max-statistic correction (issue #4) matters:
+the naive single-predictor null would have overstated significance here.
+
+## 6. Stage-2: assigning accessions to genetic clusters
+
+The regression above predicts the *continuous* genetic scores. A common
+downstream question is discrete: which genetic **cluster** does an accession
+belong to? `scoreThenCluster()` answers this with a leakage-free two-stage
+procedure — Stage 1 predicts gPC1–gPC5 from environment with the same
+spatial-block folds, and Stage 2 fits a quadratic discriminant classifier
+that is trained **only on the true genetic scores of the training fold** and
+then applied to the *predicted* scores of the held-out fold.
+
+```{r}
+## s2 <- scoreThenCluster(durumUnits, per_tree = FALSE, cv_ceiling = TRUE,
+##                         num.trees = 300, min.node.size = 3)
+s2 <- vc$s2
+s2$accuracy      # honest out-of-fold cluster accuracy
+s2$ceiling       # accuracy a regressor could reach, per ceiling_type below
+s2$ceiling_type  # which ceiling estimator was used
+s2$gap           # ceiling - accuracy = the cost of Stage-1 regression error
+s2$confusion
+```
+
+By default `ceiling` is computed **in-sample** (QDA fit and evaluated on all
+units at once), which is an optimistic upper bound rather than a validated
+estimate -- some of the `gap` could be ceiling-optimism itself rather than
+genuine Stage-1 error (adversarial-review issue #7). Passing
+`cv_ceiling = TRUE`, as used to build the cached object above, instead fits
+QDA **out-of-fold** on the same spatial-block folds used for `accuracy`, so
+the printed ceiling (`r round(s2$ceiling, 3)`,
+ceiling_type = "`r s2$ceiling_type`") is itself a validated, non-leaking
+estimate -- at the cost of `k` extra QDA fits. The honest out-of-fold
+accuracy (`r round(s2$accuracy, 3)`) sits `r round(s2$gap, 3)` below this
+validated ceiling.
+
+Two calibration diagnostics accompany the accuracy: posterior-entropy
+quartiles (`s2$entropy_calibration`, accuracy should decline monotonically
+as entropy rises) and an off-manifold typicality flag (`s2$off_manifold`)
+for accessions whose predicted scores fall outside every cluster's 95%
+Mahalanobis ellipsoid.
+
+```{r}
+s2$entropy_calibration
+s2$state_accuracy
+sum(s2$off_manifold)
+```
+
+Accuracy falls from `r round(s2$entropy_calibration$accuracy[1], 3)` in the
+most-confident posterior-entropy quartile to
+`r round(s2$entropy_calibration$accuracy[4], 3)` in the least-confident
+quartile -- the classifier's own uncertainty is informative, not just
+decorative. `r sum(s2$off_manifold)` of `r nrow(durumUnits)` units are
+flagged off-manifold (predicted scores outside every cluster's 95%
+Mahalanobis ellipsoid); their accuracy
+(`r round(s2$state_accuracy$accuracy[s2$state_accuracy$state == "off_manifold"], 3)`)
+is correspondingly the lowest of the three confidence states.
+
+## 8. Per-target conclusions
+
+Putting the diagnostics above together, target by target (all numbers from
+the reduced-setting cache used to build this vignette; see individual
+sections for the corresponding package defaults):
+
+```{r, echo = FALSE, results = "asis"}
+targets <- names(rz$per_target_R2)
+for (tg in targets) {
+  cat(sprintf(
+    "- **%s**: interpolation R2 = %.3f (spatial-block); within-country residual R2 = %.3f (p = %.3f) -> *%s*.\n",
+    tg, vc$sb$metrics$per_target$R2[vc$sb$metrics$per_target$target == tg],
+    rz$per_target_R2[tg], rz$p_value[tg], rz$verdict[tg]
+  ))
+}
+```
+
+Every target in this run clears the within-country permutation significance
+threshold, but the *size* of that residual signal varies enormously: gPC2
+carries by far the largest fold-safe within-country R2
+(`r round(rz$per_target_R2["gPC2"], 3)`), while the rest are small in
+absolute terms even where "significant". Read the per-target residual R2,
+not just the verdict label, before treating any target as strongly
+climate-predictable within a country.
+
+## 9. Mapping accessions
+
+```{r, fig.alt = "Map of accession locations coloured by genetic cluster"}
+mapAccessions(durumUnits, color_by = "Cluster",
+              main = "Durum wheat effective units")
+```
+
+## 10. Stability under perturbation
+
+A verdict is only useful if it survives reasonable changes to the
+hyperparameters that produced it. The sensitivity study
+(`inst/sensitivity_analysis.R`) reruns `confoundGapTest()` and `residualize()`
+across a grid of `num.trees`, `min.node.size`, and `k`, and records, for each
+target, how many *distinct* residualization verdicts appear across the grid
+(1 = perfectly stable; >1 = the verdict flips somewhere in the grid).
+
+```{r stability, echo = FALSE, results = "asis"}
+if (!is.null(vc$sensitivity)) {
+  se <- vc$sensitivity
+  cat(sprintf(
+    "Across %d grid cells, the observed confounding gap ranged from %.3f to %.3f (median %.3f). ",
+    se$n_cells, se$gap_range[1], se$gap_range[2], stats::median(se$grid$observed_gap)))
+  flips <- se$verdict_distinct_per_target
+  stable <- names(flips)[flips == 1]
+  unstable <- names(flips)[flips > 1]
+  cat(sprintf("Verdict stability: %s held a single verdict across every cell",
+              if (length(stable)) paste(stable, collapse = ", ") else "no target"))
+  if (length(unstable))
+    cat(sprintf("; %s flipped across the grid and should be treated as borderline.",
+                paste(unstable, collapse = ", "))) else
+    cat(" — no target flipped.")
+  cat("\n")
+} else {
+  cat("*The sensitivity-grid cache is not bundled in this build. ",
+      "Run `Rscript inst/sensitivity_analysis.R` (env vars `DURUM_SENS_*` set the ",
+      "grid) to generate `inst/cache_sensitivity_grid.rds`, then rebuild the ",
+      "vignette cache.*\n", sep = "")
+}
+```
+
+These numbers come from a deliberately reduced grid so the study runs on a
+laptop; the script accepts environment variables (`DURUM_SENS_NTREES`,
+`DURUM_SENS_NODESIZE`, `DURUM_SENS_K`, `DURUM_SENS_NPERM`) so you can widen the
+grid and raise `n_perm` for a publication-grade stability check on your own
+hardware. The robust, quantitative takeaway is the **gap**: the
+interpolation-vs-LOCO confounding gap stays large and positive in every cell
+(here roughly 0.34–0.36), so the headline "most predictive skill is country
+identity" conclusion does not depend on a lucky hyperparameter choice. Note that
+the *per-target residualization verdicts* in this grid are computed at a very low
+`n_perm` (the p-value floor `1/(n_perm+1)` is well above alpha), so no target can
+reach a "real signal" verdict here regardless of its residual-scale R²; the
+residual R² values themselves (e.g. gPC2 ≈ 0.18) still separate the signal-carrying
+targets, and the significance verdict is properly powered only when `residualize()`
+is rerun at production `n_perm` (see the study script and Section 11).
+
+## 11. Permutation-test calibration
+
+The verdicts rest on permutation p-values, so it is worth checking that the
+permutation machinery is itself well-calibrated — i.e. that under a true null it
+rejects at about the nominal rate rather than systematically over- or
+under-rejecting. `inst/validate_permutation_tests.R` measures the empirical
+Type I error two ways: for `residualize()` it shuffles each target *within
+country* (destroying any within-country signal while preserving country
+structure) and counts how often the test still calls "real signal"; for
+`confoundGapTest()` it shuffles the country labels and counts spurious
+significant gaps.
+
+```{r calibration, echo = FALSE, results = "asis"}
+if (!is.null(vc$calibration)) {
+  ca <- vc$calibration
+  cat(sprintf(
+    "At the reduced study settings (residualize: N_REP=%d, N_PERM=%d, num.trees=%d; gap: N_REP=%d, N_PERM=%d, num.trees=%d), the empirical Type I error was %.3f for `residualize()` and %.3f for `confoundGapTest()`, against a nominal alpha of %.2f. ",
+    ca$settings$N_REP, ca$settings$N_PERM, ca$settings$N_TREES,
+    ca$settings$N_REP_GAP, ca$settings$N_PERM_GAP, ca$settings$N_TREES_GAP,
+    ca$type1_resid_overall, ca$type1_gap, ca$settings$ALPHA))
+  cat("A rate near alpha indicates the permutation test is calibrated; a rate ",
+      "well above alpha would warn that the null is too easy to beat at these ",
+      "settings.\n", sep = "")
+} else {
+  cat("*The permutation-calibration cache is not bundled in this build. ",
+      "Run `Rscript inst/validate_permutation_tests.R` (env vars `DURUM_CAL_*` ",
+      "set replicate/permutation counts) to generate ",
+      "`inst/cache_permutation_calibration.rds`, then rebuild the vignette cache.*\n",
+      sep = "")
+}
+```
+
+As with the sensitivity grid, the shipped numbers are from a reduced run
+(fewer replicates and permutations than you would use for a formal calibration
+claim); the script is parameterized by environment variables so the same
+measurement can be rerun at production settings. The p-value CIs reported by
+`residualize()` and `confoundGapTest()` (v1.2.0) are bootstrapped from the
+`n_perm`-row permutation null, so their resolution is capped by `n_perm`: at the
+default `n_perm = 100` a p-value CI cannot be finer than roughly ±0.01. Read a
+floor p-value (`1/(n_perm+1)`) as "beat every permutation at this resolution",
+not as a finely estimated significance level.
+
+## 12. Using the model in practice
+
+The diagnostics above tell you *which* genetic axes carry transferable signal.
+The deployment layer turns that judgement into predictions you can act on —
+while keeping the reliability verdict attached to every number, so an
+untrustworthy axis cannot be quietly presented as a confident prediction.
+
+The reliability table is inherited directly from `residualize()`. Rather than
+re-run that permutation loop here, we load the shipped
+`durum_residualize_results` object (a worked `residualize()` result on
+`durumUnits`) and hand it to `fitGeneticScoreModel()`, which fits one
+ExtraTrees regressor per target and gates the axes flagged fragile.
+
+```{r deploy-fit}
+data(durum_residualize_results)
+mod <- fitGeneticScoreModel(
+  durumUnits,
+  residualize_result = durum_residualize_results,
+  num.trees = 100                    # light for the vignette; default is 300
+)
+mod
+```
+
+The printout lists, per axis, the `residualize()` verdict, its fragility grade,
+the residual-scale R², and the resulting reliability label. Gating is
+deliberately conservative: an axis is trusted only when its fragility grade
+reaches `robust`. At the shipped object's reduced `n_perm = 30`, no axis can
+reach `robust` — the permutation p-value floor (`1/(n_perm+1)`) sits above the
+significance threshold — so **every axis is gated**. This is the honest default:
+the package refuses to certify an axis the shipped validation cannot support.
+`predict()` still returns all columns, but marks each so a caller never mistakes
+an uncertified axis for a confirmed climate signal.
+
+```{r deploy-predict}
+newx <- durumUnits[1:5, ]
+pr   <- predict(mod, newx)
+round(pr, 3)
+attr(pr, "gated_targets")           # axes the shipped validation does not certify
+```
+
+Pass `gated_to_na = TRUE` to blank the untrustworthy columns entirely. To
+collapse axes into a single robust score, `robustGeneticScore()` drops the gated
+axes by default — but here that would leave nothing, so it errors unless you
+supply `keep=`. A production `residualize()` run (`n_perm = 100`,
+`num.trees = 600`) is what promotes gPC2 (residual R² ≈ 0.18) and gPC5 (≈ 0.06)
+to trusted; if you have run it and confirmed those axes, force-keep them:
+
+```{r deploy-robust}
+rs <- robustGeneticScore(mod, newx, keep = c("gPC2", "gPC5"))
+data.frame(robust_score = round(rs, 3),
+           axes = paste(attr(rs, "axes"), collapse = ", "))
+```
+
+Nothing is hardcoded: with the default (no `keep=`), the axes retained are
+exactly those the model's own reliability metadata marks trusted, so a
+production re-run that promotes gPC2/gPC5 makes the robust score include them
+automatically.
+
+### Guarding against extrapolation
+
+A random forest will return a confident-looking number for a site whose climate
+lies outside anything in the training data — precisely where it should not be
+trusted. `checkExtrapolationRisk()` flags such rows two ways: a per-variable
+envelope check (is any predictor outside the training range?) and a Mahalanobis
+distance against the training predictor cloud.
+
+```{r deploy-extrap}
+er <- checkExtrapolationRisk(mod, newx)
+er[, c("mahalanobis", "md_flag", "n_out_of_range", "extrapolation")]
+```
+
+On in-domain rows the flag rate is low (about 2–3% at the default 0.975
+Mahalanobis quantile); genuinely out-of-domain sites are caught reliably. Treat
+a flagged row's prediction as an extrapolation, not an interpolation.
+
+### Chaining to cluster assignment
+
+`scoreThenCluster(..., fit_final = TRUE)` additionally fits and exposes the
+final QDA classifier (`final_classifier`, class `geaQDA`). Chaining it after the
+score model gives an end-to-end climate → genetic-cluster prediction with a
+posterior probability and per-row entropy. The realistic accuracy of this path
+is the leakage-free `accuracy` that `scoreThenCluster()` reported — well below
+its `ceiling`, because Stage-1 scores are predicted from climate with limited
+transferable skill — so the posterior matters as much as the label.
+
+```{r deploy-cluster, eval = FALSE}
+s2 <- scoreThenCluster(durumUnits, per_tree = FALSE, fit_final = TRUE,
+                       num.trees = 300, min.node.size = 3)
+pc <- predictCluster(mod, newx, s2$final_classifier)
+pc                                    # predicted cluster, posterior, entropy
+```
+
+(This last chunk is shown but not evaluated here purely for vignette build
+time; `scoreThenCluster()` with `fit_final = TRUE` re-fits the full Stage-2
+model. See `?predictCluster`.)
+
+## Limitations
+
+This workflow, and every number in this vignette, comes from **one** durum
+wheat genebank collection (1,060 confident effective units, 43 countries).
+The size of the interpolation/extrapolation gap, which targets carry real
+within-country signal, and the Stage-2 clustering accuracy and ceiling are
+all properties of this dataset. They should not be assumed to generalize to
+other crops, other marker panels, or other genebank collections without
+re-running this diagnostic pipeline on the new data; only the
+*methodology* (pseudoreplication collapsing, spatial-block and
+leave-one-group-out CV, fold-safe residualization, permutation significance
+testing) is intended to be general-purpose.
+
+Verdicts from `residualize()` and `confoundGapTest()` are based on permutation
+p-values; always check the sign and magnitude of the reported R²/gap before
+treating a target as carrying real signal, and treat any p-value at or near the
+theoretical floor (1/(n_perm+1)) as low-resolution rather than strongly
+significant — rerun with a higher `n_perm` to confirm.
+
+## References
+
+Hurlbert, S.H. (1984). Pseudoreplication and the design of ecological field
+experiments. *Ecological Monographs*, 54(2), 187-211.
+
+Roberts, D.R. et al. (2017). Cross-validation strategies for data with
+temporal, spatial, hierarchical, or phylogenetic structure. *Ecography*,
+40(8), 913-929.

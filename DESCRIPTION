@@ -1,0 +1,36 @@
+Package: durumGEAr
+Type: Package
+Title: Confound-Aware Genotype-Environment Association Modelling for
+        Genebank Accessions
+Version: 1.3.0
+Authors@R: c(
+    person("Sabri", "Youssef", email = "youssef.sabri@iav.ac.ma", role = c("aut", "cre")),
+    person("Zakaria", "Kehel", role = "ths")
+    )
+Description: A methodology package for honest genotype-environment association
+    (GEA) modelling of plant genetic resources data, developed on a durum wheat
+    (Triticum turgidum ssp. durum) genebank collection. The package encapsulates
+    a defensible statistical workflow: collapsing pseudoreplicated site-level
+    rows to independent effective units (Hurlbert, 1984), spatial-block and
+    leave-one-country-out cross-validation (Roberts et al., 2017), fold-safe
+    residualization to separate genuine within-country climate signal from
+    geographic-identity confounding, and permutation-based driver analysis.
+    Function naming and structure follow the conventions of the 'icardaFIGSr'
+    package. The workflow demonstrates how a naive predictive score can be an
+    artifact of spatial confounding, and how to recover the transferable signal
+    underneath it.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends: R (>= 3.5.0)
+Imports: ranger, stats, graphics, grDevices, utils
+Suggests: testthat (>= 3.0.0), knitr, rmarkdown, vegan, ggplot2,
+        gridExtra
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0
+NeedsCompilation: no
+Packaged: 2026-07-18 03:12:38 UTC; sabri
+Author: Sabri Youssef [aut, cre],
+  Zakaria Kehel [ths]
+Maintainer: Sabri Youssef <youssef.sabri@iav.ac.ma>
