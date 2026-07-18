@@ -562,35 +562,8 @@ This vignette runs the entire pipeline (caching expensive permutation steps) and
 
 ---
 
-## Citation
-
-If you use `durumGEAr` in published research, please cite:
-
-```
-Youssef, S. & Kehel, Z. (2026). durumGEAr: Confound-aware genotype-environment 
-association modelling for genebank accessions. R package version 1.3.0.
-https://github.com/ICARDA-org/durumGEAr
-```
-
----
-
-## Research Context & References
-
-This workflow was developed to address a specific, underappreciated problem in crop genomics: spatial confounding in genotype-environment association (GEA) studies on genebank collections. The package implements:
-
-- **Pseudoreplication collapsing** following Hurlbert (1984) and principles of independent effective units in plant population genetics.
-- **Spatial-block cross-validation** following Roberts et al. (2017), preventing geographic leakage across train/test splits.
-- **Leave-one-country-out (LOGO) validation** as a harsh, honest extrapolation test distinct from interpolation.
-- **Fold-safe residualization** to isolate within-country climate signal from between-country identity confounds, with permutation significance testing (within-country target shuffling preserves the confound structure under the null).
-
-The method was validated on a durum wheat genebank collection (1,060 accessions, 43 countries), but the statistical methodology is general and applicable to any GEA dataset with spatial pseudoreplication and confounding.
-
-**Key references:**
-- Hurlbert, S. H. (1984). Pseudoreplication and the design of ecological field experiments. *Ecological Monographs*, 54(2), 187–211.
-- Roberts, D. R., et al. (2017). Cross-validation strategies for data with temporal, spatial, hierarchical, or phylogenetic structure. *Ecography*, 40(8), 913–929.
-
----
-
 ## Acknowledgment
 
 Developed under the supervision of Dr. Zakaria Kehel (ICARDA).
+
+The statistical workflow implements pseudoreplication collapsing, spatial-block and leave-one-country-out cross-validation, and fold-safe residualization with permutation significance testing — methods grounded in principles from Hurlbert (1984) on independent effective units and Roberts et al. (2017) on cross-validation with spatial structure.
