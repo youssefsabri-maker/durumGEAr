@@ -8,8 +8,7 @@ confounded** (country of origin can substitute for climate, inflating
 apparent predictive skill). It was developed on a durum wheat (*Triticum
 turgidum* ssp. *durum*) genebank collection of 1,060 confident effective
 units across 43 countries, with predictors BIO1-BIO19 + altitude +
-coordinates and targets five genetic PCA scores (gPC1-gPC5), following the
-function-naming conventions of the `icardaFIGSr` package.
+coordinates and targets five genetic PCA scores (gPC1-gPC5).
 
 **Headline finding:** the workflow's own diagnostics show why "predictive
 skill" numbers for this kind of data need to be reported with real care. A
